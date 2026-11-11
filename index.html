@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Danger Build</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column of repo "channel strips"; a top transport bar with the token/owner controls; each strip has a status lamp, the latest run, and the build buttons. */
+:root{
+  --bg:#0f0f11; --panel:#17171a; --panel-2:#1f1f24; --line:#2c2c33;
+  --fg:#ececec; --muted:#8f8f99;
+  --accent:#ffb02e; --accent-ink:#1a1200;
+  --ok:#3ecf7a; --warn:#ffb02e; --bad:#ff4d4d; --run:#5ab0ff;
+  --display:"Barlow Condensed",Impact,"Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#f3f1ec; --panel:#ffffff; --panel-2:#eeebe3; --line:#d9d4c8;
+  --fg:#17171a; --muted:#6a675f; --accent:#d9860a; --accent-ink:#fff;
+  --ok:#1f9d55; --warn:#c77a00; --bad:#d43030; --run:#1f6fd0; color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#f3f1ec; --panel:#ffffff; --panel-2:#eeebe3; --line:#d9d4c8;
+  --fg:#17171a; --muted:#6a675f; --accent:#d9860a; --accent-ink:#fff;
+  --ok:#1f9d55; --warn:#c77a00; --bad:#d43030; --run:#1f6fd0; color-scheme:light}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+.wrap{max-width:980px;margin:0 auto}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-block:24px 12px;border-bottom:2px solid var(--line)}
+h1{font:700 40px/1 var(--display);letter-spacing:.02em;margin:0;text-transform:uppercase}
+h1 small{display:block;font:500 11px/1.4 var(--mono);letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-top:6px}
+.transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{font:500 11px/1 var(--mono);letter-spacing:.06em;padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);text-transform:uppercase}
+.pill.live{border-color:var(--ok);color:var(--ok)}
+button{font:600 13px var(--body);border:1px solid var(--line);background:var(--panel-2);color:var(--fg);padding:8px 14px;border-radius:6px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+button.primary:disabled,button:disabled{opacity:.45;cursor:not-allowed}
+button.small{padding:5px 10px;font-size:12px}
+button.ghost{background:transparent}
+.setup{margin-top:20px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.setup h2{font:700 22px/1 var(--display);text-transform:uppercase;letter-spacing:.03em;margin:0 0 6px}
+.setup p{color:var(--muted);margin:0 0 14px;max-width:62ch}
+.field{display:grid;gap:6px;margin-bottom:12px}
+label{font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+input{font:14px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:9px 11px;width:100%}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.hint{font:12px var(--body);color:var(--muted)}
+.hint code{font:12px var(--mono);background:var(--panel-2);padding:1px 5px;border-radius:4px}
+.msg{margin-top:14px;font:13px var(--mono);padding:10px 12px;border-radius:6px;border:1px solid var(--line);background:var(--panel)}
+.msg.bad{border-color:var(--bad);color:var(--bad)}
+.msg.ok{border-color:var(--ok);color:var(--ok)}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:20px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.tile .n{font:700 34px/1 var(--display);font-variant-numeric:tabular-nums}
+.tile .l{font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.strips{display:grid;gap:12px;margin-top:20px}
+.strip{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.strip-head{display:flex;align-items:center;gap:12px;padding:14px 16px;border-left:6px solid var(--muted);min-width:0;flex-wrap:wrap}
+.strip-head.success{border-left-color:var(--ok)}
+.strip-head.failure{border-left-color:var(--bad)}
+.strip-head.in_progress,.strip-head.queued{border-left-color:var(--run)}
+.strip-head.cancelled{border-left-color:var(--warn)}
+.lamp{width:12px;height:12px;border-radius:50%;background:var(--muted);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--muted) 20%,transparent)}
+.lamp.success{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
+.lamp.failure{background:var(--bad);box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 25%,transparent)}
+.lamp.in_progress,.lamp.queued{background:var(--run);box-shadow:0 0 0 3px color-mix(in srgb,var(--run) 25%,transparent);animation:pulse 1.2s infinite}
+.lamp.cancelled{background:var(--warn)}
+@keyframes pulse{50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){.lamp{animation:none}}
+.repo{font:700 22px/1 var(--display);text-transform:uppercase;letter-spacing:.02em;min-width:0}
+.repo a{color:inherit;text-decoration:none}
+.meta{font:12px var(--mono);color:var(--muted);min-width:0;flex:1 1 200px}
+.meta b{color:var(--fg);font-weight:500}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.runs{border-top:1px solid var(--line);overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:560px;font:13px var(--body)}
+th{font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 16px;border-bottom:1px solid var(--line)}
+td{padding:9px 16px;border-bottom:1px solid var(--line);vertical-align:middle;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+.st{display:inline-flex;align-items:center;gap:6px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.st i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.st.success i{background:var(--ok)} .st.failure i{background:var(--bad)} .st.in_progress i,.st.queued i{background:var(--run)} .st.cancelled i{background:var(--warn)}
+td a{color:var(--run);text-decoration:none} td a:hover{text-decoration:underline}
+.empty{padding:14px 16px;color:var(--muted);font:13px var(--mono)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font:500 13px var(--body);z-index:20}
+.wf-list{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 12px}
+footer{margin-top:28px;font:12px var(--mono);color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Danger Build<small>Danger Audio · GitHub Actions console</small></h1>
+  <div class="transport">
+    <span class="pill" id="rate">rate —</span>
+    <span class="pill" id="live">offline</span>
+    <button class="small ghost" id="refresh" disabled>Refresh</button>
+    <button class="small ghost" id="settings">Settings</button>
+  </div>
+</header>
+
+<section class="setup" id="setup">
+  <h2>Connect to GitHub</h2>
+  <p>The dashboard talks to the GitHub API straight from this page, so it needs a token. It stays in this browser only. Make a fine-grained token at github.com → Settings → Developer settings → Personal access tokens, scoped to your app repos, with <b>Actions: read and write</b>, <b>Contents: read</b> and <b>Metadata: read</b>.</p>
+  <div class="field"><label for="owner">GitHub user</label><input id="owner" placeholder="tabdanger" autocomplete="off"></div>
+  <div class="field"><label for="token">Fine-grained token</label><input id="token" type="password" placeholder="github_pat_…" autocomplete="off"></div>
+  <div class="field"><label for="repos">Repos to show (blank = every repo that has a workflow)</label><input id="repos" placeholder="RedClip, BreakBoss, ConsoleEQE, CPTP, MS26" autocomplete="off"></div>
+  <div class="row">
+    <button class="primary" id="connect">Connect</button>
+    <button class="ghost" id="forget">Forget token</button>
+    <span class="hint">Builds are triggered with <code>workflow_dispatch</code>, so each workflow file needs that trigger.</span>
+  </div>
+  <div id="msg" hidden></div>
+</section>
+
+<section class="summary" id="summary" hidden>
+  <div class="tile"><div class="n" id="n-repos">0</div><div class="l">Repos</div></div>
+  <div class="tile"><div class="n" id="n-running">0</div><div class="l">Building now</div></div>
+  <div class="tile"><div class="n" id="n-green">0</div><div class="l">Last run green</div></div>
+  <div class="tile"><div class="n" id="n-red">0</div><div class="l">Last run red</div></div>
+</section>
+
+<section class="strips" id="strips"></section>
+<footer id="foot"></footer>
+</div>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const API="https://api.github.com";
+  const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+  let cfg={owner:store.get("db.owner")||"tabdanger",token:store.get("db.token")||"",repos:store.get("db.repos")||""};
+  let timer=null, repos=[], busy=false;
+
+  $("owner").value=cfg.owner; $("token").value=cfg.token; $("repos").value=cfg.repos;
+
+  function toast(t){const el=document.createElement("div");el.className="toast";el.textContent=t;document.body.appendChild(el);setTimeout(()=>el.remove(),2600)}
+  function msg(t,cls){const m=$("msg");m.hidden=false;m.className="msg "+(cls||"");m.textContent=t}
+
+  async function gh(path,opts){
+    const r=await fetch(API+path,Object.assign({headers:{Authorization:"Bearer "+cfg.token,Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}},opts||{}));
+    const rem=r.headers.get("x-ratelimit-remaining"),lim=r.headers.get("x-ratelimit-limit");
+    if(rem)$("rate").textContent="rate "+rem+"/"+lim;
+    if(r.status===204)return null;
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error((data&&data.message)||("HTTP "+r.status));
+    return data;
+  }
+
+  function status(run){ if(!run)return"none"; return run.status==="completed"?(run.conclusion||"none"):run.status; }
+  function ago(iso){ if(!iso)return"—"; const s=(Date.now()-new Date(iso))/1000; if(s<60)return Math.round(s)+"s ago"; if(s<3600)return Math.round(s/60)+"m ago"; if(s<86400)return Math.round(s/3600)+"h ago"; return Math.round(s/86400)+"d ago"; }
+  function dur(run){ if(!run||!run.run_started_at)return"—"; const end=run.status==="completed"?new Date(run.updated_at):new Date(); const s=Math.max(0,(end-new Date(run.run_started_at))/1000); return Math.floor(s/60)+"m "+String(Math.round(s%60)).padStart(2,"0")+"s"; }
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+  async function load(){
+    if(busy)return; busy=true; $("refresh").disabled=true;
+    try{
+      let names=cfg.repos.split(",").map(s=>s.trim()).filter(Boolean);
+      if(!names.length){
+        const all=await gh("/user/repos?per_page=100&sort=pushed&affiliation=owner");
+        names=all.filter(r=>r.owner.login.toLowerCase()===cfg.owner.toLowerCase()).slice(0,30).map(r=>r.name);
+      }
+      const out=await Promise.all(names.map(async name=>{
+        try{
+          const [wf,runs]=await Promise.all([gh(`/repos/${cfg.owner}/${name}/actions/workflows`),gh(`/repos/${cfg.owner}/${name}/actions/runs?per_page=8`)]);
+          const workflows=(wf.workflows||[]).filter(w=>w.state==="active");
+          if(!workflows.length)return null;
+          return {name,workflows,runs:runs.workflow_runs||[]};
+        }catch(e){return {name,error:e.message,workflows:[],runs:[]}}
+      }));
+      repos=out.filter(Boolean);
+      render(); $("live").textContent="live"; $("live").className="pill live";
+      $("foot").textContent="Updated "+new Date().toLocaleTimeString()+" · refreshes every 60s while open";
+    }catch(e){ $("live").textContent="error"; $("live").className="pill"; msg(e.message,"bad"); $("setup").hidden=false; }
+    busy=false; $("refresh").disabled=false;
+  }
+
+  function render(){
+    $("summary").hidden=false;
+    const last=repos.map(r=>r.runs[0]);
+    $("n-repos").textContent=repos.length;
+    $("n-running").textContent=repos.reduce((n,r)=>n+r.runs.filter(x=>x.status!=="completed").length,0);
+    $("n-green").textContent=last.filter(x=>status(x)==="success").length;
+    $("n-red").textContent=last.filter(x=>status(x)==="failure").length;
+    const host=$("strips"); host.innerHTML="";
+    if(!repos.length){host.innerHTML='<div class="empty">No repos with workflows found for '+esc(cfg.owner)+'. Add a workflow file or list repos in Settings.</div>';return}
+    for(const r of repos){
+      const run=r.runs[0], st=status(run);
+      const el=document.createElement("article"); el.className="strip";
+      el.innerHTML=`
+        <div class="strip-head ${st}">
+          <span class="lamp ${st}"></span>
+          <div class="repo"><a href="https://github.com/${esc(cfg.owner)}/${esc(r.name)}/actions" target="_blank" rel="noopener">${esc(r.name)}</a></div>
+          <div class="meta">${run?`<b>${esc(run.name)}</b> · ${esc(run.head_branch)} · ${esc(run.head_commit&&run.head_commit.message?run.head_commit.message.split("\n")[0].slice(0,60):"")}<br>${st.replace("_"," ")} · ${dur(run)} · ${ago(run.updated_at)}`:(r.error?"Error: "+esc(r.error):"No runs yet")}</div>
+          <div class="actions">
+            ${run&&run.status!=="completed"?`<button class="small" data-act="cancel" data-repo="${esc(r.name)}" data-run="${run.id}">Cancel</button>`:""}
+            ${run&&run.status==="completed"&&st!=="success"?`<button class="small" data-act="rerun" data-repo="${esc(r.name)}" data-run="${run.id}">Re-run</button>`:""}
+          </div>
+        </div>
+        <div class="wf-list">${r.workflows.map(w=>`<button class="small primary" data-act="build" data-repo="${esc(r.name)}" data-wf="${w.id}" data-ref="${esc(run?run.head_branch:"main")}">▶ ${esc(w.name)}</button>`).join("")}</div>
+        <div class="runs">${r.runs.length?`<table><thead><tr><th>Run</th><th>Status</th><th>Branch</th><th>Trigger</th><th>Took</th><th>When</th><th>Logs</th></tr></thead><tbody>${r.runs.map(x=>{const s=status(x);return`<tr><td>#${x.run_number} ${esc(x.name)}</td><td><span class="st ${s}"><i></i>${esc(s.replace("_"," "))}</span></td><td>${esc(x.head_branch)}</td><td>${esc(x.event)}</td><td>${dur(x)}</td><td>${ago(x.updated_at)}</td><td><a href="${esc(x.html_url)}" target="_blank" rel="noopener">open</a></td></tr>`}).join("")}</tbody></table>`:'<div class="empty">Nothing has run yet. Press a workflow button above to start the first build.</div>'}</div>`;
+      host.appendChild(el);
+    }
+  }
+
+  document.addEventListener("click",async e=>{
+    const b=e.target.closest("button[data-act]"); if(!b)return;
+    const repo=b.dataset.repo, act=b.dataset.act; b.disabled=true;
+    try{
+      if(act==="build"){
+        await gh(`/repos/${cfg.owner}/${repo}/actions/workflows/${b.dataset.wf}/dispatches`,{method:"POST",body:JSON.stringify({ref:b.dataset.ref||"main"})});
+        toast("Build queued on "+repo); setTimeout(load,4000);
+      }else if(act==="cancel"){
+        await gh(`/repos/${cfg.owner}/${repo}/actions/runs/${b.dataset.run}/cancel`,{method:"POST"}); toast("Cancelling "+repo); setTimeout(load,3000);
+      }else if(act==="rerun"){
+        await gh(`/repos/${cfg.owner}/${repo}/actions/runs/${b.dataset.run}/rerun`,{method:"POST"}); toast("Re-running "+repo); setTimeout(load,3000);
+      }
+    }catch(err){ toast(err.message.includes("workflow_dispatch")||err.message.includes("Workflow does not have")?"That workflow has no workflow_dispatch trigger":err.message); b.disabled=false; }
+  });
+
+  $("connect").addEventListener("click",async()=>{
+    cfg={owner:$("owner").value.trim()||"tabdanger",token:$("token").value.trim(),repos:$("repos").value.trim()};
+    if(!cfg.token){msg("Paste a token first.","bad");return}
+    store.set("db.owner",cfg.owner);store.set("db.token",cfg.token);store.set("db.repos",cfg.repos);
+    try{ const me=await gh("/user"); msg("Connected as "+me.login,"ok"); $("setup").hidden=true; await load(); clearInterval(timer); timer=setInterval(load,60000); }
+    catch(e){ msg("GitHub said: "+e.message,"bad"); }
+  });
+  $("forget").addEventListener("click",()=>{store.del("db.token");$("token").value="";cfg.token="";clearInterval(timer);msg("Token removed from this browser.","ok")});
+  $("settings").addEventListener("click",()=>{$("setup").hidden=!$("setup").hidden});
+  $("refresh").addEventListener("click",load);
+
+  if(cfg.token){ $("setup").hidden=true; load(); timer=setInterval(load,60000); }
+})();
+</script>
+</body>
+</html>
